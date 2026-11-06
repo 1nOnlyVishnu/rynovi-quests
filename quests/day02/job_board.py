@@ -16,15 +16,32 @@ class JobPosting(BaseModel):
     #   salary_lpa: a float or None, default None, and it can't be negative (hint: Field(default=None, ge=0))
     #   remote: bool, default False
     #   location: str or None, default None
-    pass
+    title: str
+    company: str
+    url: HttpUrl
+    salary_lpa: float | None = Field(default = None, ge = 0)
+    remote: bool = Field(default = False)
+    location: str | None = None
 
     # TODO 2.2 · Clean up the title with a @field_validator("title"):
     #   strip spaces at both ends and squash repeated spaces inside ("  ML   Engineer " -> "ML Engineer").
     #   If nothing is left, raise ValueError("title can't be empty").
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str)->str:
+        if not value.strip().split():
+            raise ValueError("title can't be empty")
+        return " ".join(value.split())
+        
 
     # TODO 2.3 · Add a @model_validator(mode="after"):
     #   an on-site job (remote is False) must have a location.
     #   If it's missing, raise ValueError("location is required for on-site jobs"). Return self otherwise.
+    @model_validator(mode="after")
+    def validate_location(self)-> "JobPosting":
+        if self.remote == False and self.location == None:
+            raise ValueError("location is required for on-site jobs")
+        return self
 
 
 def parse_postings(raw: list[dict]) -> tuple[list[JobPosting], list[str]]:
@@ -35,4 +52,19 @@ def parse_postings(raw: list[dict]) -> tuple[list[JobPosting], list[str]]:
     e.g. "record 3: url: Input should be a valid URL, relative URL without a base"
     (index starts at 0; field is the first item of the error's "loc", or "posting" if loc is empty)
     """
-    raise NotImplementedError
+    valid_postings: list[JobPosting] = [] 
+    error_messages: list[str] = []
+
+    for index, record in enumerate(raw):
+        try:
+            posting = JobPosting.model_validate(record)
+            valid_postings.append(posting)
+        except ValidationError as e:
+            first_error = e.errors()[0]
+            
+            field = first_error["loc"][0] if first_error["loc"] else "posting"
+            message = first_error["msg"]
+            error_messages.append(f"record {index}: {field}: {message}")
+
+    return (valid_postings , error_messages)
+    
