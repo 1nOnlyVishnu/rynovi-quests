@@ -25,7 +25,7 @@ class PermanentError(Exception):
     pass
 
 
-def call_with_retry(fn: Callable[[], T], attempts: int = 4, base_delay: float = 0.5, sleep: Callable[[float], None] = time.sleep) -> T:
+def call_with_retry(fn: Callable[[], T], attempts: int = 4, base_delay: float = 0.5, sleep: Callable[[float], None] = time.sleep,backoff: float = 2.0) -> T:
     """Call fn() up to `attempts` times.
 
     TODO 4.1 · Retry with exponential backoff: wait base_delay, then 2x, then 4x... between tries,
@@ -35,4 +35,15 @@ def call_with_retry(fn: Callable[[], T], attempts: int = 4, base_delay: float = 
     TODO 4.3 · Before each wait, log a warning exactly like:
               log.warning("attempt %d failed: %s; retrying in %.1fs", attempt_number, error, delay)
     """
-    raise NotImplementedError
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if isinstance(e,TransientError):
+                if attempt == attempts:
+                    raise
+                sleep_time = base_delay * (backoff ** (attempt - 1))
+                log.warning("attempt %d failed: %s; retrying in %.1fs", attempt, e, sleep_time)
+                sleep(sleep_time)
+            else:
+                raise
